@@ -1,0 +1,34 @@
+Changelog
+
+=========
+
+Verson  1.1.3
+
+- deps     add gson
+- feature  add Renderer
+- test     add Unittests
+
+Version 1.1.2
+
+- feature  default BUILD FAIL when found vulnerable
+
+Version 1.1.1
+
+- feature  BUILD FAILED when found vulnerable && parameter support
+
+Version 1.1.0
+
+- feature  add projectType param, support Maven & Android project
+
+Version 1.0.2
+
+- feature  warning detail add title and cve
+
+Version 1.0.1
+
+- feature  add onlyProvenance parameter
+- feature  add http timeout
+
+Version 1.0.0
+
+- Init

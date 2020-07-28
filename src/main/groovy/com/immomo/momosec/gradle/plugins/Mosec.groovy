@@ -1,0 +1,126 @@
+package com.immomo.momosec.gradle.plugins
+
+import com.immomo.momosec.gradle.plugins.exceptions.NetworkErrorException
+import groovy.json.JsonOutput
+import org.apache.http.HttpEntity
+import org.apache.http.HttpResponse
+import org.apache.http.client.HttpClient
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.entity.StringEntity
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+
+class Mosec implements Plugin<Project> {
+
+    /**
+     * https://developer.android.com/studio/build/dependencies#variant_aware
+     * -PconfAttr=buildtype:debug,usage:java-runtime
+     */
+    private List confAttrSpec = null
+
+    /**
+     * 过滤configuration
+     * -Pconfiguration=confNameRegex  or  -Pconfiguration=spcificConfName
+     */
+    private String confNameFilter = ".*"
+
+    /**
+     * 威胁等级 [High|Medium|Low]
+     */
+    private String severityLevel = 'High'
+
+    /**
+     * 仅检查直接依赖
+     */
+    private Boolean onlyProvenance = false
+
+    /**
+     * 发现漏洞即编译失败
+     */
+    private Boolean failOnVuln = true
+
+    /**
+     * 项目类型 [Maven|Android]
+     * 决定了使用的检索漏洞库
+     */
+    private String projectType = 'Android'
+    private def allowProjectType = ['Maven', 'Android']
+
+    /**
+     * 上报API
+     */
+    private String endpoint
+
+
+    @Override
+    void apply(Project project) {
+        project.task('mosec').doLast {
+
+            if (project.hasProperty('projectType')) {
+                projectType = project.property('projectType').toString()
+
+                if (!allowProjectType.contains(projectType)) {
+                    throw new Exception(Constants.ERROR_ON_PROJECT_TYPE)
+                }
+            }
+
+            if (project.hasProperty('endpoint')) {
+                endpoint = project.property('endpoint').toString()
+            }
+
+            def endpoint_env = System.getenv(Constants.MOSEC_ENDPOINT_ENV)
+            if (endpoint_env != null) {
+                    endpoint = endpoint_env
+                }
+
+            if (endpoint == null) {
+                throw new RuntimeException(Constants.ERROR_ON_NULL_ENDPOINT)
+            }
+
+            if (project.hasProperty('confAttr')) {
+                confAttrSpec = project.property('confAttr').toString().toLowerCase().split(',').collect { it.split(':') }
+            }
+
+            if (project.hasProperty('configuration')) {
+                confNameFilter = String.format("%s", project.property('configuration').toString().toLowerCase())
+            }
+
+            if (project.hasProperty('severityLevel')) {
+                severityLevel = project.property('severityLevel')
+            }
+
+            if (project.hasProperty('onlyProvenance')) {
+                onlyProvenance = new Boolean(project.property('onlyProvenance').toString())
+            }
+
+            if (project.hasProperty('failOnVuln')) {
+                failOnVuln = new Boolean(project.property('failOnVuln').toString())
+            }
+
+            ProjectDependencyCollector collector = new ProjectDependencyCollector(project, confAttrSpec, confNameFilter, onlyProvenance)
+            Map depsTree = collector.collect()
+
+            if (depsTree == null) { return }
+
+            depsTree['type'] = projectType
+            depsTree['language'] = Constants.PROJECT_LANGUAGE
+            depsTree['severityLevel'] = severityLevel
+
+            HttpPost request = new HttpPost(endpoint)
+            request.addHeader("Content-Type", Constants.CONTENT_TYPE_JSON)
+            HttpEntity entity = new StringEntity(JsonOutput.toJson(depsTree))
+            request.setEntity(entity)
+
+            HttpClientHelper httpClientHelper = new HttpClientHelper()
+            HttpClient client = httpClientHelper.buildHttpClient()
+            HttpResponse response = client.execute(request)
+
+            if (response.getStatusLine().getStatusCode() >= 400) {
+                throw new NetworkErrorException(response.getStatusLine().getReasonPhrase())
+            }
+
+            Renderer renderer = new Renderer(project.logger, failOnVuln)
+            renderer.renderResponse(response.getEntity().getContent())
+        }
+    }
+}
