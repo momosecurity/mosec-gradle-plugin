@@ -12,7 +12,7 @@ WeChat:
 
 <img src="https://momo-mmsrc.oss-cn-hangzhou.aliyuncs.com/img-1c96a083-7392-3b72-8aec-bad201a6abab.jpeg" width="200" hegiht="200" align="center" /><br>
 
-## 版本支持
+## 版本要求
 
 Gradle >= 3.0
 
