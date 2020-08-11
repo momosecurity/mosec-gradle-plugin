@@ -89,7 +89,7 @@ allprojects {
 
 程序返回值为1，表示发现漏洞。返回值为0，即为未发现问题。
 
-![](./static/usage.jpg)
+![usage](./static/usage.jpg)
 
 
 
@@ -115,7 +115,7 @@ MOSEC-GRADLE-PLUGIN 核心使用 org.gradle.api.artifacts.ResolvedConfiguration#
 
 3.Intellij 中新建 Remote Configuration 并填入如下信息
 
-![remote-configuration](https://github.com/momosecurity/mosec-gradle-plugin/blob/master/static/remote-configuration.jpg)
+![remote-configuration](./static/remote-configuration.jpg)
 
 4.在另一个gradle工程中执行如下命令
 
