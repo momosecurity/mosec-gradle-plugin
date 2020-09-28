@@ -34,7 +34,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.immomo.momosec:mosec-gradle-plugin:1.1.3'
+        classpath 'com.immomo.momosec:mosec-gradle-plugin:latest.release'
     }
 }
 
