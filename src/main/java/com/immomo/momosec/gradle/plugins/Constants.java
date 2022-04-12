@@ -19,6 +19,8 @@ public class Constants {
 
     public static final String ERROR_ON_PROJECT_TYPE = "Project type not allow. Use [Maven | Android].";
 
+    public static final String ERROR_ON_SEVERITY_LEVEL = "SeverityLevel value error.";
+
     public static final String ERROR_ON_VULNERABLE = "Dependency Vulnerable Found!";
 
     public static final String ERROR_ON_API = "API return data format error.";

@@ -15,8 +15,12 @@
  */
 package com.immomo.momosec.gradle.plugins
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import com.google.gson.reflect.TypeToken
 import com.immomo.momosec.gradle.plugins.exceptions.NetworkErrorException
-import groovy.json.JsonOutput
 import org.apache.http.HttpEntity
 import org.apache.http.HttpResponse
 import org.apache.http.client.HttpClient
@@ -24,6 +28,8 @@ import org.apache.http.client.methods.HttpPost
 import org.apache.http.entity.StringEntity
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+
+import static com.immomo.momosec.gradle.plugins.Renderer.writeToFile
 
 class Mosec implements Plugin<Project> {
 
@@ -43,6 +49,7 @@ class Mosec implements Plugin<Project> {
      * 威胁等级 [High|Medium|Low]
      */
     private String severityLevel = 'High'
+    private def allowSeverityLevel = ['High', 'Medium', 'Low']
 
     /**
      * 仅检查直接依赖
@@ -66,56 +73,32 @@ class Mosec implements Plugin<Project> {
      */
     private String endpoint
 
+    /**
+     * 仅分析不上报
+     */
+    private Boolean onlyAnalyze = false
+
+    /**
+     * 依赖输出到文件
+     */
+    private String outputDepToFile
 
     @Override
     void apply(Project project) {
         project.task('mosec').doLast {
-
-            if (project.hasProperty('projectType')) {
-                projectType = project.property('projectType').toString()
-
-                if (!allowProjectType.contains(projectType)) {
-                    throw new Exception(Constants.ERROR_ON_PROJECT_TYPE)
-                }
-            }
-
-            if (project.hasProperty('endpoint')) {
-                endpoint = project.property('endpoint').toString()
-            }
-
-            def endpoint_env = System.getenv(Constants.MOSEC_ENDPOINT_ENV)
-            if (endpoint_env != null) {
-                    endpoint = endpoint_env
-                }
-
-            if (endpoint == null) {
-                throw new RuntimeException(Constants.ERROR_ON_NULL_ENDPOINT)
-            }
-
-            if (project.hasProperty('confAttr')) {
-                confAttrSpec = project.property('confAttr').toString().toLowerCase().split(',').collect { it.split(':') }
-            }
-
-            if (project.hasProperty('configuration')) {
-                confNameFilter = String.format("%s", project.property('configuration').toString().toLowerCase())
-            }
-
-            if (project.hasProperty('severityLevel')) {
-                severityLevel = project.property('severityLevel')
-            }
-
-            if (project.hasProperty('onlyProvenance')) {
-                onlyProvenance = new Boolean(project.property('onlyProvenance').toString())
-            }
-
-            if (project.hasProperty('failOnVuln')) {
-                failOnVuln = new Boolean(project.property('failOnVuln').toString())
-            }
+            getArguments(project)
 
             ProjectDependencyCollector collector = new ProjectDependencyCollector(project, confAttrSpec, confNameFilter, onlyProvenance)
             Map depsTree = collector.collect()
 
             if (depsTree == null) { return }
+
+            if (onlyAnalyze) {
+                if (outputDepToFile != null && outputDepToFile != "") {
+                    writeToFile(outputDepToFile, new GsonBuilder().setPrettyPrinting().create().toJson(depsTree))
+                }
+                return
+            }
 
             depsTree['type'] = projectType
             depsTree['language'] = Constants.PROJECT_LANGUAGE
@@ -123,7 +106,7 @@ class Mosec implements Plugin<Project> {
 
             HttpPost request = new HttpPost(endpoint)
             request.addHeader("Content-Type", Constants.CONTENT_TYPE_JSON)
-            HttpEntity entity = new StringEntity(JsonOutput.toJson(depsTree))
+            HttpEntity entity = new StringEntity(new GsonBuilder().create().toJson(depsTree))
             request.setEntity(entity)
 
             HttpClientHelper httpClientHelper = new HttpClientHelper()
@@ -133,9 +116,80 @@ class Mosec implements Plugin<Project> {
             if (response.getStatusLine().getStatusCode() >= 400) {
                 throw new NetworkErrorException(response.getStatusLine().getReasonPhrase())
             }
+            InputStream resContent = response.getEntity().getContent()
+            JsonParser parser = new JsonParser()
+            JsonObject responseJson
+            try {
+                responseJson = parser.parse(new BufferedReader(new InputStreamReader(resContent))).getAsJsonObject()
+                GsonBuilder gsonBuilder = new GsonBuilder()
+                gsonBuilder.registerTypeAdapter(new TypeToken<Map <String, Object>>(){}.getType(), new MapDeserializerDoubleAsIntFix())
+                Gson gson = gsonBuilder.create()
+                depsTree['result'] = gson.fromJson(responseJson, new TypeToken<Map <String, Object>>(){}.getType())
+            } catch (Exception ignored) {
+                throw new NetworkErrorException(Constants.ERROR_ON_API)
+            }
+
+            if (outputDepToFile != null && outputDepToFile != "") {
+                writeToFile(outputDepToFile, new GsonBuilder().setPrettyPrinting().create().toJson(depsTree))
+            }
 
             Renderer renderer = new Renderer(project.logger, failOnVuln)
-            renderer.renderResponse(response.getEntity().getContent())
+            renderer.renderResponse(responseJson)
+        }
+    }
+
+    void getArguments(Project project) {
+        if (project.hasProperty('projectType')) {
+            projectType = project.property('projectType').toString()
+
+            if (!allowProjectType.contains(projectType)) {
+                throw new Exception(Constants.ERROR_ON_PROJECT_TYPE)
+            }
+        }
+
+        if (project.hasProperty('onlyAnalyze')) {
+            onlyAnalyze = new Boolean(project.property('onlyAnalyze').toString())
+        }
+
+        if (project.hasProperty('endpoint')) {
+            endpoint = project.property('endpoint').toString()
+        }
+
+        def endpoint_env = System.getenv(Constants.MOSEC_ENDPOINT_ENV)
+        if (endpoint_env != null) {
+            endpoint = endpoint_env
+        }
+
+        if (!onlyAnalyze && endpoint == null) {
+            throw new RuntimeException(Constants.ERROR_ON_NULL_ENDPOINT)
+        }
+
+        if (project.hasProperty('outputDepToFile')) {
+            outputDepToFile = project.property('outputDepToFile').toString()
+        }
+
+        if (project.hasProperty('confAttr')) {
+            confAttrSpec = project.property('confAttr').toString().toLowerCase().split(',').collect { it.split(':') }
+        }
+
+        if (project.hasProperty('configuration')) {
+            confNameFilter = String.format("%s", project.property('configuration').toString().toLowerCase())
+        }
+
+        if (project.hasProperty('severityLevel')) {
+            severityLevel = project.property('severityLevel')
+
+            if (!allowSeverityLevel.contains(severityLevel)) {
+                throw new Exception(Constants.ERROR_ON_SEVERITY_LEVEL)
+            }
+        }
+
+        if (project.hasProperty('onlyProvenance')) {
+            onlyProvenance = new Boolean(project.property('onlyProvenance').toString())
+        }
+
+        if (project.hasProperty('failOnVuln')) {
+            failOnVuln = new Boolean(project.property('failOnVuln').toString())
         }
     }
 }

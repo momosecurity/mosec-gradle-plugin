@@ -75,8 +75,10 @@ allprojects {
 ```shell script
 > mosec -PseverityLevel=Medium      // 调整威胁等级 [High|Medium|Low], 默认 High
 > mosec -PonlyProvenance=true       // 仅检查直接依赖, 默认 false
-> mosec -PprojectType=Maven         // 项目类型 [Maven|Android], 默认 Android
+> mosec -PprojectType=Android       // 项目类型 [Maven|Android], 默认 Android
 > mosec -PfailOnVuln=true           // 发现漏洞即编译失败, 默认 true
+> mosec -PonlyAnalyze=false         // 仅分析不上报, 默认 false
+> mosec -PoutputDepToFile[=FILE]    // 结果输出到文件
 ```
 
 

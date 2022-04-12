@@ -16,13 +16,10 @@
 package com.immomo.momosec.gradle.plugins;
 
 import com.immomo.momosec.gradle.plugins.exceptions.FoundVulnerableException;
-import com.immomo.momosec.gradle.plugins.exceptions.NetworkErrorException;
 import org.gradle.api.logging.Logger;
 import com.google.gson.*;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 
 public class Renderer {
 
@@ -36,15 +33,7 @@ public class Renderer {
         this.failOnVuln = failOnVuln;
     }
 
-    public void renderResponse(InputStream in) {
-        JsonParser parser = new JsonParser();
-        JsonObject responseJson;
-        try {
-            responseJson = parser.parse(new BufferedReader(new InputStreamReader(in))).getAsJsonObject();
-        } catch (Exception e) {
-            throw new NetworkErrorException(Constants.ERROR_ON_API);
-        }
-
+    public void renderResponse(JsonObject responseJson) {
         if(responseJson.get("ok") != null && responseJson.get("ok").getAsBoolean()) {
             String ok = "✓ Tested %s dependencies, no vulnerable found.";
             getLog().warn(logHelper.strongInfo(String.format(ok, responseJson.get("dependencyCount").getAsString())));
@@ -62,6 +51,19 @@ public class Renderer {
             }
         }
     }
+
+    public static void writeToFile(String fileName, String jsonTree) throws IOException {
+        File file = new File(fileName);
+        if (!file.exists()) {
+            File dir = new File(file.getAbsoluteFile().getParent());
+            dir.mkdirs();
+            file.createNewFile();
+        }
+        FileOutputStream outputStream = new FileOutputStream(file);
+        outputStream.write(jsonTree.getBytes());
+        outputStream.close();
+    }
+
 
     private void printSingleVuln(JsonObject vuln) {
         String vulnWarn = "✗ %s severity (%s - %s) found on %s@%s";

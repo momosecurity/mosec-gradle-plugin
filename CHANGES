@@ -2,6 +2,11 @@ Changelog
 
 =========
 
+Version 1.1.4
+
+- feature  support dump dependencies to file
+- feature  support onlyAnalyze mode
+
 Verson  1.1.3
 
 - deps     add gson

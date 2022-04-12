@@ -15,14 +15,13 @@
  */
 package com.immomo.momosec.gradle.plugins;
 
+import com.google.gson.JsonParser;
 import com.immomo.momosec.gradle.plugins.exceptions.FoundVulnerableException;
-import com.immomo.momosec.gradle.plugins.exceptions.NetworkErrorException;
 import org.gradle.api.logging.Logger;
 import org.junit.*;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
@@ -47,7 +46,8 @@ public class TestRenderer {
     private final String no_vulnerable_response =
         "{" +
         "  \"ok\": true," +
-        "  \"dependencyCount\": 3" +
+        "  \"dependencyCount\": 3," +
+        "  \"vulnerabilities\": []" +
         "}";
 
     private final String vulnerable_response =
@@ -100,36 +100,30 @@ public class TestRenderer {
     }
 
     @Test
-    public void renderResponseTest_ErrorJson() throws Exception {
-        exceptionRule.expect(NetworkErrorException.class);
-        exceptionRule.expectMessage(Constants.ERROR_ON_API);
-
-        Renderer renderer = new Renderer(log, true);
-        renderer.renderResponse(new ByteArrayInputStream("_".getBytes()));
-    }
-
-    @Test
-    public void renderResponseTest_NotFoundVuln() throws Exception {
+    public void renderResponseTest_NotFoundVuln() {
         Renderer renderer = new Renderer(spyLog, true);
-        renderer.renderResponse(new ByteArrayInputStream(no_vulnerable_response.getBytes()));
+        JsonParser parser = new JsonParser();
+        renderer.renderResponse(parser.parse(no_vulnerable_response).getAsJsonObject());
 
         String expect = logHelper.strongInfo("✓ Tested 3 dependencies, no vulnerable found.") + "\n";
         Assert.assertEquals(expect, outContent.toString());
     }
 
     @Test
-    public void renderResponseTest_FoundVulnWithFailOnVuln() throws Exception {
+    public void renderResponseTest_FoundVulnWithFailOnVuln() {
         exceptionRule.expect(FoundVulnerableException.class);
         exceptionRule.expectMessage(Constants.ERROR_ON_VULNERABLE);
 
         Renderer renderer = new Renderer(log, true);
-        renderer.renderResponse(new ByteArrayInputStream(vulnerable_response.getBytes()));
+        JsonParser parser = new JsonParser();
+        renderer.renderResponse(parser.parse(vulnerable_response).getAsJsonObject());
     }
 
     @Test
-    public void renderResponseTest_FoundVulnWithoutFailOnVuln() throws Exception {
+    public void renderResponseTest_FoundVulnWithoutFailOnVuln() {
         Renderer renderer = new Renderer(spyLog, false);
-        renderer.renderResponse(new ByteArrayInputStream(vulnerable_response.getBytes()));
+        JsonParser parser = new JsonParser();
+        renderer.renderResponse(parser.parse(vulnerable_response).getAsJsonObject());
 
         String expect =
                 logHelper.strongError("✗ High severity (Fake Vulnerable - CVE-0001-0001) found on com.study.foo:bar@1.0.0") + "\n" +
